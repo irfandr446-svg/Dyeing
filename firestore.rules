@@ -1,0 +1,15 @@
+rules_version = '2';
+
+// This application is intended for a single engineer with no login/auth layer
+// (per the product spec). These rules simply scope access to the known
+// collections used by the app. If you need to restrict who can read/write,
+// add Firebase Authentication back and gate on request.auth here.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /plants/{id} { allow read, write: if true; }
+    match /categories/{id} { allow read, write: if true; }
+    match /features/{id} { allow read, write: if true; }
+    match /treatments/{id} { allow read, write: if true; }
+    match /programs/{id} { allow read, write: if true; }
+  }
+}
