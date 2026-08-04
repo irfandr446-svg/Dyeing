@@ -21,7 +21,7 @@ const LABEL = '#334155';
 const PAD_L = 56;
 const PAD_R = 24;
 const PAD_T = 28;
-const PAD_B = 46;
+const PAD_B = 100;
 
 export default function ProcessProfileSVG({ steps, featureMap, height = 420, compact = false, title }: Props) {
   const geo = useMemo(() => buildProfileGeometry(steps, featureMap), [steps, featureMap]);
@@ -75,6 +75,17 @@ export default function ProcessProfileSVG({ steps, featureMap, height = 420, com
   });
 
   const arrowSize = 6;
+
+  // Stagger arrow labels vertically below the axis so clustered events (e.g.
+  // Fill, Inject, Op Call, Dosing all at similar times) fan out instead of overlapping.
+  const arrowLabelDepth: number[] = [];
+  const seenX: number[] = [];
+  geo.arrows.forEach((a) => {
+    const xPix = sx(a.x);
+    const nearbyCount = seenX.filter((sx2) => Math.abs(sx2 - xPix) < 34).length;
+    arrowLabelDepth.push(nearbyCount);
+    seenX.push(xPix);
+  });
 
   return (
     <div className="profile-svg-wrap">
@@ -138,30 +149,41 @@ export default function ProcessProfileSVG({ steps, featureMap, height = 420, com
           </React.Fragment>
         ))}
 
-        {/* event arrows — perfectly vertical, straight shafts */}
+        {/* event arrows — perfectly vertical, straight shafts, with staggered labels below */}
         {geo.arrows.map((a, i) => {
           const color = a.color === 'green' ? GREEN : ORANGE;
           const xPix = sx(a.x);
           const yLine = sy(a.yTop);
           const yBase = PAD_T + plotH;
-          if (a.direction === 'up') {
-            return (
-              <g key={`arr-${i}`}>
-                <line x1={xPix} y1={yBase} x2={xPix} y2={yLine + arrowSize} stroke={color} strokeWidth={2} />
-                <polygon
-                  points={`${xPix - arrowSize / 1.6},${yLine + arrowSize} ${xPix + arrowSize / 1.6},${yLine + arrowSize} ${xPix},${yLine}`}
-                  fill={color}
-                />
-              </g>
-            );
-          }
+          const depth = arrowLabelDepth[i];
+          const labelY = yBase + 16 + depth * 14;
           return (
             <g key={`arr-${i}`}>
-              <line x1={xPix} y1={yLine - arrowSize} x2={xPix} y2={yBase} stroke={color} strokeWidth={2} />
-              <polygon
-                points={`${xPix - arrowSize / 1.6},${yBase - arrowSize} ${xPix + arrowSize / 1.6},${yBase - arrowSize} ${xPix},${yBase}`}
-                fill={color}
-              />
+              {a.direction === 'up' ? (
+                <>
+                  <line x1={xPix} y1={yBase} x2={xPix} y2={yLine + arrowSize} stroke={color} strokeWidth={2} />
+                  <polygon
+                    points={`${xPix - arrowSize / 1.6},${yLine + arrowSize} ${xPix + arrowSize / 1.6},${yLine + arrowSize} ${xPix},${yLine}`}
+                    fill={color}
+                  />
+                </>
+              ) : (
+                <>
+                  <line x1={xPix} y1={yLine - arrowSize} x2={xPix} y2={yBase} stroke={color} strokeWidth={2} />
+                  <polygon
+                    points={`${xPix - arrowSize / 1.6},${yBase - arrowSize} ${xPix + arrowSize / 1.6},${yBase - arrowSize} ${xPix},${yBase}`}
+                    fill={color}
+                  />
+                </>
+              )}
+              {a.label && (
+                <>
+                  <line x1={xPix} y1={yBase} x2={xPix} y2={labelY - 8} stroke={color} strokeWidth={1} strokeDasharray="2 2" />
+                  <text x={xPix} y={labelY} fontSize={9.5} fontWeight={600} textAnchor="middle" fill={LABEL} fontFamily="Inter, Arial, sans-serif">
+                    {a.label}
+                  </text>
+                </>
+              )}
             </g>
           );
         })}

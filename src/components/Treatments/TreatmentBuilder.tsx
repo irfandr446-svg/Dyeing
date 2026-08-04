@@ -162,39 +162,53 @@ export default function TreatmentBuilder({ treatmentId, onClose }: { treatmentId
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 12 }}>
-        <div className="two-col">
-          <div className="field-row">
-            <label>Treatment Number</label>
-            <input value={draft.number} onChange={(e) => setDraft({ ...draft, number: e.target.value })} />
+      <div className="builder-toolbar">
+        <input
+          className="toolbar-number-input"
+          value={draft.number}
+          onChange={(e) => setDraft({ ...draft, number: e.target.value })}
+          placeholder="TR-001"
+        />
+        <input
+          className="toolbar-name-input"
+          value={draft.name}
+          onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+          placeholder="e.g. Polyester Dyeing"
+        />
+        <select
+          className="toolbar-select"
+          value={draft.plantId}
+          onChange={(e) => setDraft({ ...draft, plantId: e.target.value })}
+        >
+          {plants.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <select
+          className="toolbar-select"
+          value={draft.categoryId}
+          onChange={(e) => setDraft({ ...draft, categoryId: e.target.value })}
+        >
+          {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <div className="toolbar-spacer" />
+        <span className="toolbar-status">{JSON.stringify(draft) !== baseline.current ? 'Unsaved changes' : 'Saved'}</span>
+      </div>
+
+      <div className="profile-panel">
+        <div className="profile-panel-header">
+          <div>
+            <div className="profile-panel-title">
+              {(draft.name || 'Untitled')} Profile <span className="profile-panel-number">{draft.number}</span>
+            </div>
           </div>
-          <div className="field-row">
-            <label>Treatment Name</label>
-            <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="e.g. Polyester Dyeing" />
-          </div>
-          <div className="field-row">
-            <label>Plant</label>
-            <select value={draft.plantId} onChange={(e) => setDraft({ ...draft, plantId: e.target.value })}>
-              {plants.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
-          <div className="field-row">
-            <label>Category</label>
-            <select value={draft.categoryId} onChange={(e) => setDraft({ ...draft, categoryId: e.target.value })}>
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
+          <div className="profile-panel-total">{formatDuration(total)}</div>
         </div>
-        <div className="field-row" style={{ marginBottom: 0 }}>
-          <label>Description</label>
-          <textarea value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} rows={2} />
-        </div>
+        <ProcessProfileSVG steps={draft.steps} featureMap={featureMap} height={340} />
       </div>
 
       <div className="builder-grid">
-        {/* Feature Library */}
+        {/* Add step */}
         <div className="builder-panel">
-          <div className="builder-panel-header">Feature Library</div>
+          <div className="builder-panel-header">Add step</div>
           <div className="builder-panel-body">
             {features.map((f) => (
               <div key={f.id} className="feature-chip" onClick={() => addStep(f.id)} title="Click to add to timeline">
@@ -206,11 +220,14 @@ export default function TreatmentBuilder({ treatmentId, onClose }: { treatmentId
           </div>
         </div>
 
-        {/* Process Steps */}
+        {/* Process steps */}
         <div className="builder-panel">
           <div className="builder-panel-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Process Steps ({draft.steps.length})</span>
-            {clipboard && <button className="icon-btn" title="Paste step" onClick={pasteStep}><Clipboard size={14} /></button>}
+            <span>Process steps</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="badge">{draft.steps.length} steps</span>
+              {clipboard && <button className="icon-btn" title="Paste step" onClick={pasteStep}><Clipboard size={14} /></button>}
+            </span>
           </div>
           <div className="builder-panel-body">
             {draft.steps.length === 0 && <div className="empty-state">Click a feature on the left to add the first step.</div>}
@@ -222,7 +239,7 @@ export default function TreatmentBuilder({ treatmentId, onClose }: { treatmentId
                   {f && <FeatureIcon name={f.icon} size={14} color={f.color} />}
                   <div style={{ flex: 1 }}>
                     <div className="step-name">{f?.name || 'Unknown'} {s.parallel && <span className="badge">parallel</span>}</div>
-                    <div className="step-meta">{formatDuration(s.durationMinutes)} · {s.startTime}–{s.endTime} min</div>
+                    <div className="step-meta">{formatDuration(s.durationMinutes)} · {s.startTemp ?? '—'}°C → {s.endTemp ?? s.startTemp ?? '—'}°C</div>
                   </div>
                   <div className="step-row-actions">
                     <button className="icon-btn" onClick={(e) => { e.stopPropagation(); moveStep(s.id, -1); }}><ArrowUp size={13} /></button>
@@ -237,10 +254,10 @@ export default function TreatmentBuilder({ treatmentId, onClose }: { treatmentId
           </div>
         </div>
 
-        {/* Step Properties */}
+        {/* Edit step */}
         <div className="builder-panel">
           <div className="builder-panel-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
-            Step Properties
+            Edit step
             {selectedStep && <button className="icon-btn" onClick={() => setSelectedStepId(null)}><X size={13} /></button>}
           </div>
           <div className="builder-panel-body">
@@ -252,12 +269,11 @@ export default function TreatmentBuilder({ treatmentId, onClose }: { treatmentId
         </div>
       </div>
 
-      <div className="profile-panel">
-        <div className="profile-panel-header">
-          <strong style={{ fontSize: 12.5 }}>Live Process Profile</strong>
-          <span className="badge">Total {formatDuration(total)}</span>
+      <div className="card" style={{ marginTop: 12 }}>
+        <div className="field-row" style={{ marginBottom: 0 }}>
+          <label>Description</label>
+          <textarea value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} rows={2} />
         </div>
-        <ProcessProfileSVG steps={draft.steps} featureMap={featureMap} height={340} />
       </div>
     </div>
   );
