@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import { Feature, Program, Treatment } from '../types';
-import { buildProfileGeometry, isYellowParallelKind } from './profileGeometry';
+import { buildProfileGeometry, isYellowParallelKind, PDF_SCALE } from './profileGeometry';
 import { formatDuration } from './timeUtils';
 
 let logoDataUrl: string | null = null;
@@ -56,8 +56,7 @@ function drawProfile(
   caption?: string,
   totalLabel?: string,
 ) {
-  const geo = buildProfileGeometry(steps, featureMap);
-  const tRange = Math.max(1, geo.totalMinutes);
+  const geo = buildProfileGeometry(steps, featureMap, PDF_SCALE);
   const tempRange = Math.max(10, geo.maxTemp - geo.minTemp);
   const capH = caption ? 7 : 0;
   const padL = 4, padTop = capH + 10, padBottomEvents = 22;
@@ -67,7 +66,9 @@ function drawProfile(
   const plotH = Math.max(10, plotB - plotT);
   const baseline = plotB + 8;
 
-  const sx = (m: number) => x0 + padL + (m / tRange) * plotW;
+  // If the schematic layout is wider than the available page width, scale it down uniformly.
+  const shrink = geo.totalUnits > plotW ? plotW / geo.totalUnits : 1;
+  const sx = (u: number) => x0 + padL + u * shrink;
   const sy = (t: number) => plotT + plotH - ((t - geo.minTemp) / tempRange) * plotH;
 
   if (caption) {
@@ -124,6 +125,7 @@ function drawProfile(
   doc.setFont('helvetica', 'italic');
   doc.setTextColor(...MUTED);
   geo.segments.forEach((seg) => {
+    if (!seg.tickLabel) return;
     const midX = (sx(seg.p1.x) + sx(seg.p2.x)) / 2;
     const midY = (sy(seg.p1.y) + sy(seg.p2.y)) / 2;
     doc.text(seg.tickLabel, midX, midY - 2.4, { align: 'center' });
@@ -134,7 +136,7 @@ function drawProfile(
   doc.setFontSize(7);
   doc.setTextColor(...CORNER);
   geo.corners.forEach((c) => {
-    doc.text(`${Math.round(c.temp)}°C`, sx(c.x), sy(c.temp) - 5, { align: 'center' });
+    doc.text(c.text, sx(c.x), sy(c.temp) - 5, { align: 'center' });
   });
   doc.setFont('helvetica', 'normal');
 

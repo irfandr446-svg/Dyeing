@@ -10,6 +10,7 @@ import { calculateTreatmentTotal, calculateProgramTotal } from '../utils/timeUti
 interface AppContextValue {
   ready: boolean;
   saveState: SaveState;
+  dbError: string | null;
   treatmentsLoaded: boolean;
   programsLoaded: boolean;
 
@@ -47,6 +48,7 @@ function useCollectionState<T extends { id: string }>(
   name: string,
   fallback: T[],
   orderField = 'order',
+  onError?: (msg: string) => void,
 ) {
   const [items, setItems] = useState<T[]>(fallback);
   const [loaded, setLoaded] = useState(!firebaseReady);
@@ -61,9 +63,11 @@ function useCollectionState<T extends { id: string }>(
         }
         setLoaded(true);
       },
-      () => {
-        // fall back silently to local defaults on permission/connection errors
+      (err) => {
+        // fall back silently to local defaults on permission/connection errors,
+        // but surface the reason so it's diagnosable from Settings/Header.
         setLoaded(true);
+        onError?.(`Firestore error on "${name}": ${err.code || err.message}`);
       },
     );
     return () => unsub();
@@ -73,11 +77,12 @@ function useCollectionState<T extends { id: string }>(
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [saveState, setSaveState] = useState<SaveState>('idle');
-  const [plants] = useCollectionState<Plant>('plants', defaultPlants);
-  const [categories] = useCollectionState<Category>('categories', defaultCategories);
-  const [features] = useCollectionState<Feature>('features', defaultFeatures);
-  const [treatments, setTreatments, treatmentsLoaded] = useCollectionState<Treatment>('treatments', [], 'number');
-  const [programs, setProgramsRaw, programsLoaded] = useCollectionState<Program>('programs', [], 'number');
+  const [dbError, setDbError] = useState<string | null>(null);
+  const [plants] = useCollectionState<Plant>('plants', defaultPlants, 'order', setDbError);
+  const [categories] = useCollectionState<Category>('categories', defaultCategories, 'order', setDbError);
+  const [features] = useCollectionState<Feature>('features', defaultFeatures, 'order', setDbError);
+  const [treatments, setTreatments, treatmentsLoaded] = useCollectionState<Treatment>('treatments', [], 'number', setDbError);
+  const [programs, setProgramsRaw, programsLoaded] = useCollectionState<Program>('programs', [], 'number', setDbError);
 
   const [currentPlantId, setCurrentPlantIdState] = useState<string>(() => {
     return localStorage.getItem('style-textile:currentPlant') || 'plant-1';
@@ -87,22 +92,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('style-textile:currentPlant', id);
   }, []);
 
-  // Seed Firestore with defaults on first run (best-effort, ignored if offline/no permissions)
+  // Seed Firestore with defaults on first run (best-effort; surfaces a clear
+  // error instead of silently doing nothing if the database can't be reached —
+  // this is almost always a wrong/missing VITE_FIREBASE_FIRESTORE_DATABASE_ID
+  // or undeployed firestore.rules).
   useEffect(() => {
     if (!firebaseReady) return;
     (async () => {
       try {
-        for (const p of defaultPlants) {
-          await setDoc(doc(db, 'plants', p.id), p, { merge: true }).catch(() => {});
-        }
-        for (const c of defaultCategories) {
-          await setDoc(doc(db, 'categories', c.id), c, { merge: true }).catch(() => {});
-        }
-        for (const f of defaultFeatures) {
-          await setDoc(doc(db, 'features', f.id), f, { merge: true }).catch(() => {});
-        }
-      } catch {
-        /* offline / not configured — app still works from local defaults */
+        for (const p of defaultPlants) await setDoc(doc(db, 'plants', p.id), p, { merge: true });
+        for (const c of defaultCategories) await setDoc(doc(db, 'categories', c.id), c, { merge: true });
+        for (const f of defaultFeatures) await setDoc(doc(db, 'features', f.id), f, { merge: true });
+      } catch (e: any) {
+        setDbError(`Could not write to Firestore: ${e?.code || e?.message || e}. Check VITE_FIREBASE_FIRESTORE_DATABASE_ID and that firestore.rules is deployed.`);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -113,10 +115,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       await fn();
       setSaveState('saved');
+      setDbError(null);
       setTimeout(() => setSaveState((s) => (s === 'saved' ? 'idle' : s)), 1500);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
       setSaveState('error');
+      setDbError(`Save failed: ${e?.code || e?.message || e}`);
     }
   }, []);
 
@@ -217,6 +221,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value: AppContextValue = {
     ready: true,
     saveState,
+    dbError,
     treatmentsLoaded,
     programsLoaded,
     plants,

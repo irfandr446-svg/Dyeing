@@ -213,6 +213,19 @@ function TreatmentBuilderInner({ existing, onClose }: { existing: Treatment | nu
         </div>
       </div>
 
+      <div className="profile-panel" style={{ marginBottom: 12 }}>
+        <ProcessProfileSVG
+          steps={draft.steps}
+          featureMap={featureMap}
+          height={360}
+          title={`${categoryName || 'Process'} Profile`}
+          subtitle={draft.number}
+          totalLabel={formatDuration(total)}
+          onSelectStep={setSelectedStepId}
+          selectedStepId={selectedStepId}
+        />
+      </div>
+
       <div className="builder-grid">
         {/* Feature Library */}
         <div className="builder-panel">
@@ -278,19 +291,6 @@ function TreatmentBuilderInner({ existing, onClose }: { existing: Treatment | nu
             )}
           </div>
         </div>
-      </div>
-
-      <div className="profile-panel">
-        <ProcessProfileSVG
-          steps={draft.steps}
-          featureMap={featureMap}
-          height={360}
-          title={`${categoryName || 'Process'} Profile`}
-          subtitle={draft.number}
-          totalLabel={formatDuration(total)}
-          onSelectStep={setSelectedStepId}
-          selectedStepId={selectedStepId}
-        />
       </div>
     </div>
   );

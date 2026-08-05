@@ -124,8 +124,8 @@ input, select, textarea {
   display: grid;
   grid-template-columns: 220px 1fr 260px;
   gap: 12px;
-  height: calc(100vh - 210px);
-  min-height: 420px;
+  height: 56vh;
+  min-height: 380px;
 }
 .builder-panel { background: #fff; border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
 .builder-panel-header { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); }
@@ -155,7 +155,7 @@ input, select, textarea {
 .field-row input, .field-row select, .field-row textarea { width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; }
 .field-row textarea { resize: vertical; min-height: 50px; }
 
-.profile-panel { grid-column: 1 / 4; margin-top: 12px; background: #fff; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; height: 46vh; min-height: 320px; display: flex; flex-direction: column; }
+.profile-panel { grid-column: 1 / 4; background: #fff; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; height: 46vh; min-height: 320px; display: flex; flex-direction: column; }
 .profile-panel-header { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
 .profile-svg-wrap { flex: 1; overflow-x: auto; overflow-y: hidden; padding: 6px 0; }
 

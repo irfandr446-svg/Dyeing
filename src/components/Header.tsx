@@ -2,7 +2,7 @@ import React from 'react';
 import { useApp } from '../context/AppContext';
 
 export default function Header() {
-  const { plants, currentPlantId, setCurrentPlantId, saveState } = useApp();
+  const { plants, currentPlantId, setCurrentPlantId, saveState, dbError } = useApp();
 
   return (
     <header className="app-header">
@@ -15,6 +15,11 @@ export default function Header() {
       </div>
 
       <div className="plant-select">
+        {dbError && (
+          <span className="save-indicator error" title={dbError} style={{ cursor: 'help' }}>
+            ⚠ Firestore issue
+          </span>
+        )}
         <span className={`save-indicator ${saveState}`}>
           {saveState === 'saving' && 'Saving…'}
           {saveState === 'saved' && 'Saved'}

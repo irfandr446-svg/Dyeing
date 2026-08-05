@@ -30,13 +30,25 @@ persist between reloads until a Firebase project is connected.
 ### Firebase project
 1. Create a Firebase project → add a Web App → copy the config values into `.env`.
 2. Enable **Firestore** (Native mode).
-3. Deploy `firestore.rules` (single-engineer app, no auth gate by default):
+3. **Check your database ID.** Projects auto-provisioned by AI Studio / Gemini
+   often get a Firestore database with a *custom* ID rather than `(default)`.
+   Open Firebase Console → Firestore Database and look at the database picker
+   / breadcrumb — if it shows something like
+   `ai-studio-yourproject-xxxxxxxx-xxxx-...` instead of the word "default",
+   copy that into `VITE_FIREBASE_FIRESTORE_DATABASE_ID` in your `.env`.
+   **This is the #1 cause of "nothing saves to Firestore"** — the app looks
+   like it works (it falls back to local defaults) but every read/write
+   silently fails against a database that doesn't exist. The in-app Settings
+   page and the header will show a Firestore error banner if this happens.
+4. Deploy `firestore.rules` (single-engineer app, no auth gate by default):
    ```bash
    npm i -g firebase-tools
    firebase login
    firebase init firestore   # point at this project, keep firestore.rules
    firebase deploy --only firestore:rules
    ```
+   A brand-new Firestore database denies all access until rules are deployed
+   — this is the #2 cause of silent save failures.
 
 ## Build & deploy
 
