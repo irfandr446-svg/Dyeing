@@ -25,10 +25,32 @@ function nextNumber(existing: Treatment[]) {
 }
 
 export default function TreatmentBuilder({ treatmentId, onClose }: { treatmentId: string | null; onClose: () => void }) {
-  const { treatments, plants, categories, features, saveTreatment, currentPlantId } = useApp();
+  const { treatments, plants, categories, features, saveTreatment, currentPlantId, treatmentsLoaded } = useApp();
   const { setDirty, setSaveHandler } = useUnsavedGuard();
 
   const existing = treatmentId ? treatments.find((t) => t.id === treatmentId) : null;
+
+  // Waiting on the initial Firestore fetch before we know whether an existing
+  // record exists — building a blank draft here would silently create a
+  // duplicate instead of editing the real record.
+  if (treatmentId && !existing && !treatmentsLoaded) {
+    return <div className="empty-state">Loading treatment…</div>;
+  }
+  if (treatmentId && !existing && treatmentsLoaded) {
+    return (
+      <div className="empty-state">
+        This treatment could not be found.
+        <div style={{ marginTop: 10 }}><button className="btn" onClick={onClose}>Back to Treatments</button></div>
+      </div>
+    );
+  }
+
+  return <TreatmentBuilderInner key={existing?.id || 'new'} existing={existing || null} onClose={onClose} />;
+}
+
+function TreatmentBuilderInner({ existing, onClose }: { existing: Treatment | null; onClose: () => void }) {
+  const { treatments, plants, categories, features, saveTreatment, currentPlantId } = useApp();
+  const { setDirty, setSaveHandler } = useUnsavedGuard();
 
   const [draft, setDraft] = useState<Treatment>(() => existing || {
     id: `treatment-${Date.now()}`,

@@ -10,6 +10,8 @@ import { calculateTreatmentTotal, calculateProgramTotal } from '../utils/timeUti
 interface AppContextValue {
   ready: boolean;
   saveState: SaveState;
+  treatmentsLoaded: boolean;
+  programsLoaded: boolean;
 
   plants: Plant[];
   categories: Category[];
@@ -47,22 +49,26 @@ function useCollectionState<T extends { id: string }>(
   orderField = 'order',
 ) {
   const [items, setItems] = useState<T[]>(fallback);
+  const [loaded, setLoaded] = useState(!firebaseReady);
   useEffect(() => {
     if (!firebaseReady) return;
     const q = query(collection(db, name), orderBy(orderField as string));
     const unsub = onSnapshot(
       q,
       (snap) => {
-        if (snap.empty) return; // keep local defaults until seeded
-        setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() } as T)));
+        if (!snap.empty) {
+          setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() } as T)));
+        }
+        setLoaded(true);
       },
       () => {
         // fall back silently to local defaults on permission/connection errors
+        setLoaded(true);
       },
     );
     return () => unsub();
   }, [name, orderField]);
-  return [items, setItems] as const;
+  return [items, setItems, loaded] as const;
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -70,8 +76,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [plants] = useCollectionState<Plant>('plants', defaultPlants);
   const [categories] = useCollectionState<Category>('categories', defaultCategories);
   const [features] = useCollectionState<Feature>('features', defaultFeatures);
-  const [treatments, setTreatments] = useCollectionState<Treatment>('treatments', [], 'number');
-  const [programs, setProgramsRaw] = useCollectionState<Program>('programs', [], 'number');
+  const [treatments, setTreatments, treatmentsLoaded] = useCollectionState<Treatment>('treatments', [], 'number');
+  const [programs, setProgramsRaw, programsLoaded] = useCollectionState<Program>('programs', [], 'number');
 
   const [currentPlantId, setCurrentPlantIdState] = useState<string>(() => {
     return localStorage.getItem('style-textile:currentPlant') || 'plant-1';
@@ -211,6 +217,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value: AppContextValue = {
     ready: true,
     saveState,
+    treatmentsLoaded,
+    programsLoaded,
     plants,
     categories,
     features,

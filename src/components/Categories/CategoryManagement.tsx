@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Pencil } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export default function CategoryManagement() {
@@ -39,9 +39,11 @@ export default function CategoryManagement() {
 
       {categories.map((c) => (
         <div className="list-manager-row" key={c.id}>
+          <Pencil size={13} className="edit-affordance" />
           <input
             defaultValue={c.name}
             onBlur={(e) => { if (e.target.value.trim() && e.target.value !== c.name) renameCategory(c.id, e.target.value.trim()); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
           />
           <span className="badge" style={{ marginRight: 10 }}>{usage(c.id)} treatment(s)</span>
           <button className="icon-btn" onClick={() => setConfirmId(c.id)}>

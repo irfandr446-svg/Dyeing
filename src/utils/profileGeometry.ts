@@ -85,6 +85,7 @@ export function buildProfileGeometry(
   let lastCornerTemp: number | null = null;
   let minTemp = currentTemp;
   let maxTemp = currentTemp;
+  const SUBPATH_GAP = 12; // fixed visual gap (minutes-equivalent) inserted after Drain -> Fill breaks
 
   const pushCorner = (x: number, temp: number) => {
     if (lastCornerTemp === null || Math.round(temp) !== Math.round(lastCornerTemp)) {
@@ -111,12 +112,14 @@ export function buildProfileGeometry(
       continue;
     }
 
+    const newSubpath = prevKind === 'drain' && kind === 'fill';
+    if (newSubpath) cursor += SUBPATH_GAP;
+
     const x1 = cursor;
     const x2 = cursor + duration;
     let y1 = currentTemp;
     let y2 = currentTemp;
     const isDiagonal = kind === 'heat' || kind === 'cool';
-    const newSubpath = prevKind === 'drain' && kind === 'fill';
 
     if (isDiagonal) {
       y1 = typeof step.startTemp === 'number' ? step.startTemp : currentTemp;

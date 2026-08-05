@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import * as Icons from 'lucide-react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Pencil } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { FeatureKind } from '../../types';
+import { Feature, FeatureKind } from '../../types';
 
 const ICON_CHOICES = [
   'Droplet', 'ArrowDownToLine', 'Flame', 'Snowflake', 'Pause', 'Play', 'Syringe', 'Beaker',
@@ -13,69 +13,94 @@ const ICON_CHOICES = [
 
 const COLOR_CHOICES = ['#16a34a', '#ea580c', '#dc2626', '#0284c7', '#334155', '#ca8a04', '#0891b2', '#7c3aed', '#64748b'];
 
+const KIND_OPTIONS: { value: FeatureKind; label: string }[] = [
+  { value: 'hold', label: 'Hold (flat line)' },
+  { value: 'heat', label: 'Heat (rising diagonal)' },
+  { value: 'cool', label: 'Cool (falling diagonal)' },
+  { value: 'fill', label: 'Fill (green up arrow)' },
+  { value: 'drain', label: 'Drain (orange down arrow)' },
+  { value: 'inject', label: 'Inject / Dose (green up arrow)' },
+  { value: 'circulation', label: 'Circulation (yellow parallel band)' },
+  { value: 'custom', label: 'Generic step' },
+];
+
 function FeatureIcon({ name, size = 16, color }: { name: string; size?: number; color?: string }) {
   const Cmp = (Icons as any)[name] || Icons.Settings;
   return <Cmp size={size} color={color} />;
 }
 
+interface Draft {
+  id: string | null; // null = creating new
+  name: string;
+  icon: string;
+  color: string;
+  kind: FeatureKind;
+}
+
+const BLANK_DRAFT: Draft = { id: null, name: '', icon: 'Settings', color: '#334155', kind: 'custom' };
+
 export default function FeatureLibraryView() {
   const { features, addFeature, updateFeature, deleteFeature } = useApp();
-  const [showNew, setShowNew] = useState(false);
+  const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  const [draft, setDraft] = useState({ name: '', icon: 'Settings', color: '#334155', kind: 'custom' as FeatureKind });
+
+  const openEdit = (f: Feature) => setDraft({ id: f.id, name: f.name, icon: f.icon, color: f.color, kind: f.kind });
+  const openNew = () => setDraft({ ...BLANK_DRAFT });
+
+  const save = () => {
+    if (!draft || !draft.name.trim()) return;
+    if (draft.id) {
+      updateFeature(draft.id, { name: draft.name.trim(), icon: draft.icon, color: draft.color });
+    } else {
+      addFeature({ name: draft.name.trim(), icon: draft.icon, color: draft.color, kind: draft.kind });
+    }
+    setDraft(null);
+  };
 
   return (
     <div>
       <div className="page-header">
         <div>
           <div className="page-title">Feature Library</div>
-          <div className="page-subtitle">Building blocks used in the Treatment Builder timeline. Custom features behave exactly like built-in ones.</div>
+          <div className="page-subtitle">Building blocks used in the Treatment Builder timeline. Every feature — built-in or custom — can be renamed, recolored, and re-iconed.</div>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowNew(true)}><Plus size={14} /> Add Feature</button>
+        <button className="btn btn-primary" onClick={openNew}><Plus size={14} /> Add Feature</button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 8 }}>
         {features.map((f) => (
-          <div key={f.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10 }}>
-            <div className="feature-icon-dot" style={{ background: f.color, width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div key={f.id} className="card feature-card" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10 }}>
+            <div style={{ background: f.color, width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <FeatureIcon name={f.icon} size={16} color="#fff" />
             </div>
-            <input
-              defaultValue={f.name}
-              style={{ flex: 1, border: 'none', fontWeight: 600, fontSize: 13, background: 'transparent' }}
-              onBlur={(e) => { if (e.target.value.trim() && e.target.value !== f.name) updateFeature(f.id, { name: e.target.value.trim() }); }}
-            />
+            <div style={{ flex: 1, fontWeight: 600, fontSize: 13 }}>{f.name}</div>
+            <button className="icon-btn" onClick={() => openEdit(f)} title="Edit feature"><Pencil size={14} /></button>
             {f.isCustom && (
-              <button className="icon-btn" onClick={() => setConfirmId(f.id)}><Trash2 size={15} /></button>
+              <button className="icon-btn" onClick={() => setConfirmId(f.id)} title="Delete feature"><Trash2 size={15} /></button>
             )}
           </div>
         ))}
       </div>
 
-      {showNew && (
+      {draft && (
         <div className="modal-backdrop">
           <div className="modal-box" style={{ width: 380 }}>
-            <h3>New Custom Feature</h3>
-            <p>Custom features get their own icon, color and appear alongside built-in features.</p>
+            <h3>{draft.id ? 'Edit Feature' : 'New Custom Feature'}</h3>
+            <p>{draft.id ? 'Rename it, or give it a new icon and color.' : 'Custom features get their own icon, color and appear alongside built-in features.'}</p>
 
             <div className="field-row">
               <label>Name</label>
               <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="e.g. Softener Dosing" />
             </div>
 
-            <div className="field-row">
-              <label>Behaviour (drives the profile arrow style)</label>
-              <select value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value as FeatureKind })}>
-                <option value="hold">Hold (flat line)</option>
-                <option value="heat">Heat (rising diagonal)</option>
-                <option value="cool">Cool (falling diagonal)</option>
-                <option value="fill">Fill (green up arrow)</option>
-                <option value="drain">Drain (orange down arrow)</option>
-                <option value="inject">Inject / Dose (green up arrow)</option>
-                <option value="circulation">Circulation (yellow parallel band)</option>
-                <option value="custom">Generic step</option>
-              </select>
-            </div>
+            {!draft.id && (
+              <div className="field-row">
+                <label>Behaviour (drives the profile arrow style)</label>
+                <select value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value as FeatureKind })}>
+                  {KIND_OPTIONS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+                </select>
+              </div>
+            )}
 
             <div className="field-row">
               <label>Icon</label>
@@ -107,17 +132,9 @@ export default function FeatureLibraryView() {
             </div>
 
             <div className="modal-actions">
-              <button className="btn" onClick={() => setShowNew(false)}>Cancel</button>
-              <button
-                className="btn btn-primary"
-                disabled={!draft.name.trim()}
-                onClick={() => {
-                  addFeature(draft);
-                  setDraft({ name: '', icon: 'Settings', color: '#334155', kind: 'custom' });
-                  setShowNew(false);
-                }}
-              >
-                Add Feature
+              <button className="btn" onClick={() => setDraft(null)}>Cancel</button>
+              <button className="btn btn-primary" disabled={!draft.name.trim()} onClick={save}>
+                {draft.id ? 'Save Changes' : 'Add Feature'}
               </button>
             </div>
           </div>

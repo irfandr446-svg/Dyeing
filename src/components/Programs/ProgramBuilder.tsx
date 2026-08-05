@@ -12,10 +12,27 @@ function nextNumber(existing: Program[]) {
 }
 
 export default function ProgramBuilder({ programId, onClose }: { programId: string | null; onClose: () => void }) {
+  const { programs, programsLoaded } = useApp();
+  const existing = programId ? programs.find((p) => p.id === programId) : null;
+
+  if (programId && !existing && !programsLoaded) {
+    return <div className="empty-state">Loading program…</div>;
+  }
+  if (programId && !existing && programsLoaded) {
+    return (
+      <div className="empty-state">
+        This program could not be found.
+        <div style={{ marginTop: 10 }}><button className="btn" onClick={onClose}>Back to Programs</button></div>
+      </div>
+    );
+  }
+
+  return <ProgramBuilderInner key={existing?.id || 'new'} existing={existing || null} onClose={onClose} />;
+}
+
+function ProgramBuilderInner({ existing, onClose }: { existing: Program | null; onClose: () => void }) {
   const { programs, treatments, plants, features, saveProgram, currentPlantId } = useApp();
   const { setDirty, setSaveHandler } = useUnsavedGuard();
-
-  const existing = programId ? programs.find((p) => p.id === programId) : null;
 
   const [draft, setDraft] = useState<Program>(() => existing || {
     id: `program-${Date.now()}`,
