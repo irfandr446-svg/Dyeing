@@ -197,12 +197,20 @@ export default function ProgramBuilder({ programId, onClose }: { programId: stri
           const t = treatmentMap[entry.treatmentId];
           if (!t) return null;
           return (
-            <div className="profile-panel" key={entry.id} style={{ height: 280, marginBottom: 12 }}>
-              <div className="profile-panel-header">
-                <strong style={{ fontSize: 12.5 }}>{t.number} — {t.name}</strong>
-                <span className="badge">{formatDuration(t.totalDurationMinutes)}{entry.delayBeforeMinutes ? ` · +${entry.delayBeforeMinutes}min delay before` : ''}</span>
-              </div>
-              <ProcessProfileSVG steps={t.steps} featureMap={featureMap} height={220} compact />
+            <div className="profile-panel" key={entry.id} style={{ height: 260, marginBottom: 12 }}>
+              {entry.delayBeforeMinutes > 0 && (
+                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', padding: '6px 10px 0' }}>
+                  +{entry.delayBeforeMinutes} min delay before this treatment
+                </div>
+              )}
+              <ProcessProfileSVG
+                steps={t.steps}
+                featureMap={featureMap}
+                height={230}
+                compact
+                title={`${t.number} — ${t.name}`}
+                totalLabel={formatDuration(t.totalDurationMinutes)}
+              />
             </div>
           );
         })}

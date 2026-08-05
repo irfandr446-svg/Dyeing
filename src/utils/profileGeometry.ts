@@ -11,40 +11,42 @@ export interface ProfileSegment {
   feature: Feature | undefined;
   p1: ProfilePoint;
   p2: ProfilePoint;
-  newSubpath: boolean; // true = do not connect to previous segment (visual break)
+  newSubpath: boolean; // true = visual break (e.g. after Drain -> Fill)
+  isDiagonal: boolean; // heat/cool ramp
+  tickLabel: string; // small gray label centered above the segment (duration, or gradient for ramps)
 }
 
 export interface ProfileArrow {
   step: TreatmentStep;
   feature: Feature | undefined;
   x: number; // minutes
-  yTop: number; // °C at line
+  lineY: number; // °C where the arrow meets the main line
   direction: 'up' | 'down';
   color: 'green' | 'orange';
   label: string;
 }
 
-export interface ProfileParallelBand {
+/** Parallel operation shown as a dashed diagonal ramp from the baseline up to the main line. */
+export interface ProfileParallelRamp {
   step: TreatmentStep;
   feature: Feature | undefined;
   x1: number;
   x2: number;
-  label: string;
+  lineY: number; // main-line temp at x2, where the ramp arrives
+  durationLabel: string;
+  nameLabel: string;
 }
 
-export interface ProfileLabel {
+export interface ProfileCornerLabel {
   x: number;
-  y: number;
-  text: string;
-  anchor: 'start' | 'middle' | 'end';
-  row: number; // stacking row, 0 = on the line, positive = below/above offsets
+  temp: number;
 }
 
 export interface ProfileGeometry {
   segments: ProfileSegment[];
   arrows: ProfileArrow[];
-  bands: ProfileParallelBand[];
-  labels: ProfileLabel[];
+  ramps: ProfileParallelRamp[];
+  corners: ProfileCornerLabel[];
   totalMinutes: number;
   minTemp: number;
   maxTemp: number;
@@ -64,21 +66,34 @@ const YELLOW_PARALLEL_KINDS = new Set([
   'forward_circulation', 'reverse_circulation',
 ]);
 
+export function isYellowParallelKind(kind: string): boolean {
+  return YELLOW_PARALLEL_KINDS.has(kind);
+}
+
 export function buildProfileGeometry(
   steps: TreatmentStep[],
   featureMap: Record<string, Feature>,
 ): ProfileGeometry {
   const segments: ProfileSegment[] = [];
   const arrows: ProfileArrow[] = [];
-  const bands: ProfileParallelBand[] = [];
-  const labels: ProfileLabel[] = [];
+  const ramps: ProfileParallelRamp[] = [];
+  const corners: ProfileCornerLabel[] = [];
 
-  let cursor = 0; // minutes, main sequential timeline
-  let currentTemp = 30; // ambient start temperature
+  let cursor = 0;
+  let currentTemp = 30;
   let prevKind: string | null = null;
+  let lastCornerTemp: number | null = null;
   let minTemp = currentTemp;
   let maxTemp = currentTemp;
-  let rowToggle = 0;
+
+  const pushCorner = (x: number, temp: number) => {
+    if (lastCornerTemp === null || Math.round(temp) !== Math.round(lastCornerTemp)) {
+      corners.push({ x, temp });
+      lastCornerTemp = temp;
+    }
+  };
+
+  pushCorner(0, currentTemp);
 
   for (const step of steps) {
     const feature = featureMap[step.featureId];
@@ -86,10 +101,13 @@ export function buildProfileGeometry(
     const duration = deriveDuration(step);
 
     if (step.parallel) {
-      // Parallel op: dashed band drawn alongside the current position, doesn't move the main cursor.
       const x1 = Math.max(0, cursor - duration);
       const x2 = cursor;
-      bands.push({ step, feature, x1, x2, label: feature?.name || 'Parallel Op' });
+      ramps.push({
+        step, feature, x1, x2, lineY: currentTemp,
+        durationLabel: formatDuration(duration),
+        nameLabel: step.label || feature?.name || 'Parallel Op',
+      });
       continue;
     }
 
@@ -97,49 +115,37 @@ export function buildProfileGeometry(
     const x2 = cursor + duration;
     let y1 = currentTemp;
     let y2 = currentTemp;
-    let newSubpath = prevKind === 'drain' && kind === 'fill';
+    const isDiagonal = kind === 'heat' || kind === 'cool';
+    const newSubpath = prevKind === 'drain' && kind === 'fill';
 
-    if (kind === 'heat' || kind === 'cool') {
+    if (isDiagonal) {
       y1 = typeof step.startTemp === 'number' ? step.startTemp : currentTemp;
       y2 = typeof step.endTemp === 'number' ? step.endTemp : y1;
     } else if (kind === 'fill') {
       const fillTemp = typeof step.startTemp === 'number' ? step.startTemp : currentTemp;
-      y1 = fillTemp;
-      y2 = fillTemp;
+      y1 = fillTemp; y2 = fillTemp;
     } else if (FLAT_KINDS.has(kind)) {
       const flatTemp = typeof step.startTemp === 'number' ? step.startTemp : currentTemp;
-      y1 = flatTemp;
-      y2 = flatTemp;
+      y1 = flatTemp; y2 = flatTemp;
     }
 
-    segments.push({ step, feature, p1: { x: x1, y: y1 }, p2: { x: x2, y: y2 }, newSubpath });
+    const tickLabel = isDiagonal
+      ? (step.gradient ? `${step.gradient}°C/min` : formatDuration(duration))
+      : formatDuration(duration);
+
+    segments.push({ step, feature, p1: { x: x1, y: y1 }, p2: { x: x2, y: y2 }, newSubpath, isDiagonal, tickLabel });
 
     minTemp = Math.min(minTemp, y1, y2);
     maxTemp = Math.max(maxTemp, y1, y2);
 
-    // Event arrows (point events layered on top of the line at the segment start)
     if (GREEN_KINDS.has(kind)) {
-      arrows.push({ step, feature, x: x1, yTop: y1, direction: 'up', color: 'green', label: feature?.name || '' });
+      arrows.push({ step, feature, x: x1, lineY: y1, direction: 'up', color: 'green', label: step.label || feature?.name || '' });
     } else if (kind === 'drain') {
-      arrows.push({ step, feature, x: x1, yTop: y1, direction: 'down', color: 'orange', label: feature?.name || 'Drain' });
+      arrows.push({ step, feature, x: x1, lineY: y1, direction: 'down', color: 'orange', label: step.label || feature?.name || 'Drain' });
     }
 
-    // Labels: temp / duration / gradient / feature name, alternating rows to reduce overlap
-    const midX = (x1 + x2) / 2;
-    const row = rowToggle % 2 === 0 ? 1 : -1;
-    rowToggle++;
-    const parts: string[] = [];
-    if (feature?.name) parts.push(feature.name);
-    if (kind === 'heat' || kind === 'cool') {
-      if (typeof step.startTemp === 'number' && typeof step.endTemp === 'number') {
-        parts.push(`${step.startTemp}°C → ${step.endTemp}°C`);
-      }
-      if (step.gradient) parts.push(`${step.gradient}°C/min`);
-    } else if (typeof step.startTemp === 'number') {
-      parts.push(`${step.startTemp}°C`);
-    }
-    parts.push(formatDuration(duration));
-    labels.push({ x: midX, y: y2, text: parts.join(' · '), anchor: 'middle', row });
+    if (newSubpath) pushCorner(x1, y1);
+    if (isDiagonal) pushCorner(x2, y2);
 
     currentTemp = y2;
     cursor = x2;
@@ -154,14 +160,10 @@ export function buildProfileGeometry(
   return {
     segments,
     arrows,
-    bands,
-    labels,
+    ramps,
+    corners,
     totalMinutes: cursor,
     minTemp: Math.floor(Math.min(minTemp, 20) / 10) * 10,
     maxTemp: Math.ceil(Math.max(maxTemp, 40) / 10) * 10,
   };
-}
-
-export function isYellowParallelKind(kind: string): boolean {
-  return YELLOW_PARALLEL_KINDS.has(kind);
 }

@@ -25,7 +25,8 @@ const NAVY: [number, number, number] = [30, 41, 59];
 const GREEN: [number, number, number] = [22, 163, 74];
 const ORANGE: [number, number, number] = [234, 88, 12];
 const YELLOW: [number, number, number] = [202, 138, 4];
-const MUTED: [number, number, number] = [100, 116, 139];
+const MUTED: [number, number, number] = [148, 163, 184];
+const CORNER: [number, number, number] = [15, 23, 42];
 
 async function drawHeader(doc: jsPDF, title: string, subtitle: string) {
   const logo = await getLogo();
@@ -39,8 +40,25 @@ async function drawHeader(doc: jsPDF, title: string, subtitle: string) {
   doc.text('STYLE TEXTILE', 32, 17);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...MUTED);
+  doc.setTextColor(100, 116, 139);
   doc.text('Process & Machine R&D', 32, 22);
+
+  // legend, top-right
+  let lx = pageWidth - 90;
+  const ly = 14;
+  doc.setFontSize(7.5);
+  const legendItem = (color: [number, number, number], symbol: 'up' | 'down' | 'dash', label: string) => {
+    doc.setDrawColor(...color); doc.setFillColor(...color);
+    if (symbol === 'up') doc.triangle(lx, ly + 1.6, lx + 2.4, ly + 1.6, lx + 1.2, ly - 1, 'F');
+    if (symbol === 'down') doc.triangle(lx, ly - 1, lx + 2.4, ly - 1, lx + 1.2, ly + 1.6, 'F');
+    if (symbol === 'dash') { doc.setLineWidth(0.3); doc.setLineDashPattern([0.8, 0.6], 0); doc.line(lx + 1.2, ly - 1.5, lx + 1.2, ly + 1.8); doc.setLineDashPattern([], 0); }
+    doc.setTextColor(...CORNER);
+    doc.text(label, lx + 4, ly + 1.2);
+    lx += 4 + doc.getTextWidth(label) + 5;
+  };
+  legendItem(GREEN, 'up', 'Addition / inject');
+  legendItem(ORANGE, 'down', 'Drain');
+  legendItem(YELLOW, 'dash', 'Gradual dosing');
 
   doc.setDrawColor(226, 232, 240);
   doc.line(14, 27, pageWidth - 14, 27);
@@ -51,7 +69,7 @@ async function drawHeader(doc: jsPDF, title: string, subtitle: string) {
   doc.text(title, 14, 36);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...MUTED);
+  doc.setTextColor(100, 116, 139);
   doc.text(subtitle, 14, 42);
 }
 
@@ -65,76 +83,96 @@ function drawProfile(
   const geo = buildProfileGeometry(steps, featureMap);
   const tRange = Math.max(1, geo.totalMinutes);
   const tempRange = Math.max(10, geo.maxTemp - geo.minTemp);
-  const padL = 12, padB = 8, padT = 4;
+  const padL = 4, padTop = 12, padBottomEvents = 22;
   const plotW = w - padL - 4;
-  const plotH = h - padT - padB;
+  const plotT = y0 + padTop;
+  const plotB = y0 + h - padBottomEvents;
+  const plotH = Math.max(10, plotB - plotT);
+  const baseline = plotB + 8;
 
   const sx = (m: number) => x0 + padL + (m / tRange) * plotW;
-  const sy = (t: number) => y0 + padT + plotH - ((t - geo.minTemp) / tempRange) * plotH;
+  const sy = (t: number) => plotT + plotH - ((t - geo.minTemp) / tempRange) * plotH;
 
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.15);
-  doc.line(x0 + padL, y0 + padT, x0 + padL, y0 + padT + plotH);
-  doc.line(x0 + padL, y0 + padT + plotH, x0 + padL + plotW, y0 + padT + plotH);
+  doc.line(x0 + padL, baseline, x0 + padL + plotW, baseline);
 
-  doc.setFontSize(6);
-  doc.setTextColor(...MUTED);
-  const tempStep = tempRange > 100 ? 20 : 10;
-  for (let t = geo.minTemp; t <= geo.maxTemp; t += tempStep) {
-    doc.text(`${t}°`, x0 + padL - 2, sy(t) + 1, { align: 'right' });
-  }
-
-  // bands (parallel ops)
-  geo.bands.forEach((b) => {
-    const c = isYellowParallelKind(b.feature?.kind || '') ? YELLOW : GREEN;
+  // parallel ramps
+  geo.ramps.forEach((r) => {
+    const c = isYellowParallelKind(r.feature?.kind || '') ? YELLOW : GREEN;
     doc.setDrawColor(...c);
     doc.setLineWidth(0.3);
     doc.setLineDashPattern([1, 0.8], 0);
-    doc.line(sx(b.x1), y0 + padT + plotH, sx(b.x1), y0 + padT + 2);
-    doc.line(sx(b.x2), y0 + padT + plotH, sx(b.x2), y0 + padT + 2);
+    doc.line(sx(r.x1), baseline, sx(r.x2), sy(r.lineY));
     doc.setLineDashPattern([], 0);
+    doc.setFontSize(6);
+    doc.setTextColor(...c);
+    doc.text(r.durationLabel, (sx(r.x1) + sx(r.x2)) / 2, Math.min(sy(r.lineY), baseline) - 2, { align: 'center' });
+    doc.text(r.nameLabel, sx(r.x2), baseline + 5, { align: 'center' });
   });
 
   // main line
   doc.setDrawColor(...NAVY);
-  doc.setLineWidth(0.6);
-  let lastPoint: { x: number; y: number } | null = null;
+  doc.setLineWidth(0.7);
   geo.segments.forEach((seg) => {
-    const x1 = sx(seg.p1.x), y1 = sy(seg.p1.y), x2 = sx(seg.p2.x), y2 = sy(seg.p2.y);
-    if (seg.newSubpath) lastPoint = null;
-    doc.line(x1, y1, x2, y2);
-    lastPoint = { x: x2, y: y2 };
+    doc.line(sx(seg.p1.x), sy(seg.p1.y), sx(seg.p2.x), sy(seg.p2.y));
   });
+
+  // vertices
+  doc.setFillColor(...NAVY);
+  geo.segments.forEach((seg) => {
+    doc.circle(sx(seg.p1.x), sy(seg.p1.y), 0.5, 'F');
+    doc.circle(sx(seg.p2.x), sy(seg.p2.y), 0.5, 'F');
+  });
+
+  // tick labels (duration / gradient)
+  doc.setFontSize(5.5);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(...MUTED);
+  geo.segments.forEach((seg) => {
+    const midX = (sx(seg.p1.x) + sx(seg.p2.x)) / 2;
+    const midY = (sy(seg.p1.y) + sy(seg.p2.y)) / 2;
+    doc.text(seg.tickLabel, midX, midY - 2.4, { align: 'center' });
+  });
+
+  // corner bold temp labels
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  doc.setTextColor(...CORNER);
+  geo.corners.forEach((c) => {
+    doc.text(`${Math.round(c.temp)}°C`, sx(c.x), sy(c.temp) - 5, { align: 'center' });
+  });
+  doc.setFont('helvetica', 'normal');
 
   // arrows
   geo.arrows.forEach((a) => {
     const c = a.color === 'green' ? GREEN : ORANGE;
     doc.setDrawColor(...c);
-    doc.setFillColor(...c);
     doc.setLineWidth(0.4);
     const xp = sx(a.x);
-    const yLine = sy(a.yTop);
-    const yBase = y0 + padT + plotH;
-    if (a.direction === 'up') {
-      doc.line(xp, yBase, xp, yLine);
-    } else {
-      doc.line(xp, yLine, xp, yBase);
-    }
+    const yLine = sy(a.lineY);
+    if (a.direction === 'up') doc.line(xp, baseline, xp, yLine);
+    else doc.line(xp, yLine, xp, baseline);
+    doc.setFontSize(6);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...CORNER);
+    doc.text(a.label, xp, baseline + 5, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
   });
-
-  doc.setFontSize(6);
-  doc.setTextColor(...MUTED);
 }
 
 export async function exportTreatmentPDF(treatment: Treatment, categoryName: string, plantName: string, featureMap: Record<string, Feature>) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  await drawHeader(doc, `${treatment.number} — ${treatment.name || 'Untitled Treatment'}`, `Plant: ${plantName}   ·   Category: ${categoryName}   ·   Total Time: ${formatDuration(treatment.totalDurationMinutes)}`);
+  await drawHeader(
+    doc,
+    `${treatment.number} — ${treatment.name || 'Untitled Treatment'}`,
+    `Plant: ${plantName}   ·   Category: ${categoryName}   ·   Total Time: ${formatDuration(treatment.totalDurationMinutes)}`,
+  );
 
-  drawProfile(doc, treatment.steps, featureMap, 14, 48, pageWidth - 28, 110);
+  drawProfile(doc, treatment.steps, featureMap, 14, 48, pageWidth - 28, 108);
 
-  // step list table
   let y = 168;
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
@@ -156,8 +194,8 @@ export async function exportTreatmentPDF(treatment: Treatment, categoryName: str
     const f = featureMap[s.featureId];
     doc.setTextColor(...NAVY);
     doc.text(String(i + 1), 14, y);
-    doc.text(f?.name || 'Unknown', 34, y);
-    doc.setTextColor(...MUTED);
+    doc.text(s.label || f?.name || 'Unknown', 34, y);
+    doc.setTextColor(100, 116, 139);
     doc.text(formatDuration(s.durationMinutes), 90, y);
     doc.text(typeof s.startTemp === 'number' ? `${s.startTemp}°C${typeof s.endTemp === 'number' && s.endTemp !== s.startTemp ? ` → ${s.endTemp}°C` : ''}` : '—', 115, y);
     doc.text((s.notes || '').slice(0, 60), 140, y);
@@ -171,15 +209,13 @@ export async function exportProgramPDF(program: Program, plantName: string, trea
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  await drawHeader(doc, `${program.number} — ${program.name || 'Untitled Program'}`, `Plant: ${plantName}   ·   Treatments: ${program.entries.length}   ·   Total Time: ${formatDuration(program.totalDurationMinutes)}`);
+  await drawHeader(
+    doc,
+    `${program.number} — ${program.name || 'Untitled Program'}`,
+    `Plant: ${plantName}   ·   Treatments: ${program.entries.length}   ·   Total Time: ${formatDuration(program.totalDurationMinutes)}`,
+  );
 
   let y = 48;
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...NAVY);
-  doc.text('Sequence', 14, y);
-  y += 6;
-
   program.entries.forEach((entry, i) => {
     const t = treatmentMap[entry.treatmentId];
     if (!t) return;
@@ -190,7 +226,7 @@ export async function exportProgramPDF(program: Program, plantName: string, trea
     doc.text(`${i + 1}. ${t.number} — ${t.name}`, 14, y);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.setTextColor(...MUTED);
+    doc.setTextColor(100, 116, 139);
     doc.text(`${formatDuration(t.totalDurationMinutes)}${entry.delayBeforeMinutes ? `  ·  +${entry.delayBeforeMinutes} min delay before` : ''}`, 14, y + 4);
     y += 10;
     drawProfile(doc, t.steps, featureMap, 14, y, pageWidth - 28, 46);

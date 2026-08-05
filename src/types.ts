@@ -61,6 +61,9 @@ export interface TreatmentStep {
   featureId: string;
   durationMinutes: number;
 
+  /** Optional override for the feature's default name, shown on the profile and step list. */
+  label?: string;
+
   // Temperature related (heat / cool / hold / run / fill)
   startTemp?: number;
   endTemp?: number;

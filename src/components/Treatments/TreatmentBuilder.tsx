@@ -162,57 +162,43 @@ export default function TreatmentBuilder({ treatmentId, onClose }: { treatmentId
         </div>
       </div>
 
-      <div className="builder-toolbar">
-        <input
-          className="toolbar-number-input"
-          value={draft.number}
-          onChange={(e) => setDraft({ ...draft, number: e.target.value })}
-          placeholder="TR-001"
-        />
-        <input
-          className="toolbar-name-input"
-          value={draft.name}
-          onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-          placeholder="e.g. Polyester Dyeing"
-        />
-        <select
-          className="toolbar-select"
-          value={draft.plantId}
-          onChange={(e) => setDraft({ ...draft, plantId: e.target.value })}
-        >
-          {plants.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-        <select
-          className="toolbar-select"
-          value={draft.categoryId}
-          onChange={(e) => setDraft({ ...draft, categoryId: e.target.value })}
-        >
-          {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <div className="toolbar-spacer" />
-        <span className="toolbar-status">{JSON.stringify(draft) !== baseline.current ? 'Unsaved changes' : 'Saved'}</span>
-      </div>
-
-      <div className="profile-panel">
-        <div className="profile-panel-header">
-          <div>
-            <div className="profile-panel-title">
-              {(draft.name || 'Untitled')} Profile <span className="profile-panel-number">{draft.number}</span>
-            </div>
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div className="two-col">
+          <div className="field-row">
+            <label>Treatment Number</label>
+            <input value={draft.number} onChange={(e) => setDraft({ ...draft, number: e.target.value })} />
           </div>
-          <div className="profile-panel-total">{formatDuration(total)}</div>
+          <div className="field-row">
+            <label>Treatment Name</label>
+            <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="e.g. Polyester Dyeing" />
+          </div>
+          <div className="field-row">
+            <label>Plant</label>
+            <select value={draft.plantId} onChange={(e) => setDraft({ ...draft, plantId: e.target.value })}>
+              {plants.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div className="field-row">
+            <label>Category</label>
+            <select value={draft.categoryId} onChange={(e) => setDraft({ ...draft, categoryId: e.target.value })}>
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
         </div>
-        <ProcessProfileSVG steps={draft.steps} featureMap={featureMap} height={340} />
+        <div className="field-row" style={{ marginBottom: 0 }}>
+          <label>Description</label>
+          <textarea value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} rows={2} />
+        </div>
       </div>
 
       <div className="builder-grid">
-        {/* Add step */}
+        {/* Feature Library */}
         <div className="builder-panel">
-          <div className="builder-panel-header">Add step</div>
+          <div className="builder-panel-header">Add Step</div>
           <div className="builder-panel-body">
             {features.map((f) => (
-              <div key={f.id} className="feature-chip" onClick={() => addStep(f.id)} title="Click to add to timeline">
-                <span className="feature-icon-dot" style={{ background: f.color }} />
+              <div key={f.id} className="feature-chip feature-chip-add" onClick={() => addStep(f.id)} title="Click to add to timeline">
+                <Icons.Plus size={13} color={f.color} />
                 <FeatureIcon name={f.icon} size={14} color={f.color} />
                 {f.name}
               </div>
@@ -220,14 +206,11 @@ export default function TreatmentBuilder({ treatmentId, onClose }: { treatmentId
           </div>
         </div>
 
-        {/* Process steps */}
+        {/* Process Steps */}
         <div className="builder-panel">
           <div className="builder-panel-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Process steps</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span className="badge">{draft.steps.length} steps</span>
-              {clipboard && <button className="icon-btn" title="Paste step" onClick={pasteStep}><Clipboard size={14} /></button>}
-            </span>
+            <span>Process Steps · {draft.steps.length}</span>
+            {clipboard && <button className="icon-btn" title="Paste step" onClick={pasteStep}><Clipboard size={14} /></button>}
           </div>
           <div className="builder-panel-body">
             {draft.steps.length === 0 && <div className="empty-state">Click a feature on the left to add the first step.</div>}
@@ -238,8 +221,8 @@ export default function TreatmentBuilder({ treatmentId, onClose }: { treatmentId
                   <span className="step-idx">{i + 1}</span>
                   {f && <FeatureIcon name={f.icon} size={14} color={f.color} />}
                   <div style={{ flex: 1 }}>
-                    <div className="step-name">{f?.name || 'Unknown'} {s.parallel && <span className="badge">parallel</span>}</div>
-                    <div className="step-meta">{formatDuration(s.durationMinutes)} · {s.startTemp ?? '—'}°C → {s.endTemp ?? s.startTemp ?? '—'}°C</div>
+                    <div className="step-name">{s.label || f?.name || 'Unknown'} {s.parallel && <span className="badge">parallel</span>}</div>
+                    <div className="step-meta">{formatDuration(s.durationMinutes)} · {s.startTime}–{s.endTime} min</div>
                   </div>
                   <div className="step-row-actions">
                     <button className="icon-btn" onClick={(e) => { e.stopPropagation(); moveStep(s.id, -1); }}><ArrowUp size={13} /></button>
@@ -254,32 +237,52 @@ export default function TreatmentBuilder({ treatmentId, onClose }: { treatmentId
           </div>
         </div>
 
-        {/* Edit step */}
+        {/* Edit Step */}
         <div className="builder-panel">
           <div className="builder-panel-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
-            Edit step
+            Edit Step
             {selectedStep && <button className="icon-btn" onClick={() => setSelectedStepId(null)}><X size={13} /></button>}
           </div>
           <div className="builder-panel-body">
             {!selectedStep && <div className="empty-state">Select a step to edit its properties.</div>}
             {selectedStep && selectedFeature && (
-              <StepPropertiesForm step={selectedStep} kind={selectedFeature.kind} onChange={(patch) => updateStep(selectedStep.id, patch)} />
+              <StepPropertiesForm
+                step={selectedStep}
+                kind={selectedFeature.kind}
+                onChange={(patch) => updateStep(selectedStep.id, patch)}
+                features={features}
+                onChangeFeature={(featureId) => updateStep(selectedStep.id, { featureId })}
+              />
             )}
           </div>
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 12 }}>
-        <div className="field-row" style={{ marginBottom: 0 }}>
-          <label>Description</label>
-          <textarea value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} rows={2} />
-        </div>
+      <div className="profile-panel">
+        <ProcessProfileSVG
+          steps={draft.steps}
+          featureMap={featureMap}
+          height={360}
+          title={`${categoryName || 'Process'} Profile`}
+          subtitle={draft.number}
+          totalLabel={formatDuration(total)}
+          onSelectStep={setSelectedStepId}
+          selectedStepId={selectedStepId}
+        />
       </div>
     </div>
   );
 }
 
-function StepPropertiesForm({ step, kind, onChange }: { step: TreatmentStep; kind: string; onChange: (p: Partial<TreatmentStep>) => void }) {
+function StepPropertiesForm({
+  step, kind, onChange, features, onChangeFeature,
+}: {
+  step: TreatmentStep;
+  kind: string;
+  onChange: (p: Partial<TreatmentStep>) => void;
+  features: { id: string; name: string }[];
+  onChangeFeature: (featureId: string) => void;
+}) {
   const heatCool = kind === 'heat' || kind === 'cool';
   const isFill = kind === 'fill';
   const isInjectDose = kind === 'inject' || kind === 'dose';
@@ -288,6 +291,18 @@ function StepPropertiesForm({ step, kind, onChange }: { step: TreatmentStep; kin
 
   return (
     <div>
+      <div className="field-row">
+        <label>Label</label>
+        <input value={step.label ?? ''} onChange={(e) => onChange({ label: e.target.value })} placeholder="Override display name (optional)" />
+      </div>
+
+      <div className="field-row">
+        <label>Type</label>
+        <select value={step.featureId} onChange={(e) => onChangeFeature(e.target.value)}>
+          {features.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+        </select>
+      </div>
+
       {heatCool && (
         <>
           <div className="field-row">

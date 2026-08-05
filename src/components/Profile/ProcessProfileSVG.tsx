@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
 import { Feature, TreatmentStep } from '../../types';
 import { buildProfileGeometry, isYellowParallelKind } from '../../utils/profileGeometry';
-import { formatDuration } from '../../utils/timeUtils';
 
 interface Props {
   steps: TreatmentStep[];
@@ -9,38 +8,61 @@ interface Props {
   height?: number;
   compact?: boolean;
   title?: string;
+  subtitle?: string;
+  totalLabel?: string;
+  onSelectStep?: (stepId: string) => void;
+  selectedStepId?: string | null;
 }
 
 const NAVY = '#1e293b';
 const GREEN = '#16a34a';
 const ORANGE = '#ea580c';
 const YELLOW = '#ca8a04';
-const AXIS = '#94a3b8';
-const LABEL = '#334155';
+const AXIS = '#cbd5e1';
+const TICK_LABEL = '#94a3b8';
+const CORNER_LABEL = '#0f172a';
+const NAME_LABEL = '#1e293b';
 
-const PAD_L = 56;
-const PAD_R = 24;
-const PAD_T = 28;
-const PAD_B = 100;
+const PAD_L = 20;
+const PAD_R = 40;
+const PAD_T_BASE = 46; // room for corner temp labels + gradient ticks above the line
+const EVENT_ZONE = 92; // room below the line for arrows + wrapped name labels
 
-export default function ProcessProfileSVG({ steps, featureMap, height = 420, compact = false, title }: Props) {
+function wrapName(name: string): string[] {
+  if (name.length <= 12) return [name];
+  const words = name.split(' ');
+  if (words.length === 1) return [name];
+  const mid = Math.ceil(words.length / 2);
+  return [words.slice(0, mid).join(' '), words.slice(mid).join(' ')];
+}
+
+export default function ProcessProfileSVG({
+  steps, featureMap, height = 420, compact = false, title, subtitle, totalLabel,
+  onSelectStep, selectedStepId,
+}: Props) {
   const geo = useMemo(() => buildProfileGeometry(steps, featureMap), [steps, featureMap]);
-  const width = Math.max(900, geo.totalMinutes * 6 + PAD_L + PAD_R);
+  const minutesPerPixel = compact ? 3.2 : 5.2;
+  const width = Math.max(compact ? 620 : 900, geo.totalMinutes * minutesPerPixel + PAD_L + PAD_R);
+
+  const headerH = title ? 34 : 0;
+  const plotT = headerH + PAD_T_BASE;
+  const plotB = height - EVENT_ZONE;
+  const plotH = Math.max(60, plotB - plotT);
 
   const plotW = width - PAD_L - PAD_R;
-  const plotH = height - PAD_T - PAD_B;
   const tRange = Math.max(1, geo.totalMinutes);
   const tempRange = Math.max(10, geo.maxTemp - geo.minTemp);
 
   const sx = (minutes: number) => PAD_L + (minutes / tRange) * plotW;
-  const sy = (temp: number) => PAD_T + plotH - ((temp - geo.minTemp) / tempRange) * plotH;
+  const sy = (temp: number) => plotT + plotH - ((temp - geo.minTemp) / tempRange) * plotH;
+  const eventBaseline = plotB + 26;
 
   if (steps.length === 0) {
     return (
-      <div className="profile-empty">
+      <div className="profile-svg-wrap">
         <svg viewBox={`0 0 900 ${height}`} width="100%" height={height}>
           <rect x={0} y={0} width={900} height={height} fill="#ffffff" />
-          <text x={450} y={height / 2} textAnchor="middle" fill="#94a3b8" fontSize={14} fontFamily="Inter, Arial, sans-serif">
+          <text x={450} y={height / 2} textAnchor="middle" fill="#94a3b8" fontSize={13} fontFamily="Inter, Arial, sans-serif">
             Add process steps to see the live profile
           </text>
         </svg>
@@ -48,19 +70,6 @@ export default function ProcessProfileSVG({ steps, featureMap, height = 420, com
     );
   }
 
-  // temp axis ticks
-  const tempTicks: number[] = [];
-  const step = tempRange > 100 ? 20 : 10;
-  for (let t = geo.minTemp; t <= geo.maxTemp; t += step) tempTicks.push(t);
-
-  // time axis ticks (every ~20% of duration, rounded to 5 min)
-  const timeTickCount = 6;
-  const timeTicks: number[] = [];
-  for (let i = 0; i <= timeTickCount; i++) {
-    timeTicks.push(Math.round((tRange * i) / timeTickCount));
-  }
-
-  // Build path "d" strings, breaking at newSubpath boundaries
   const paths: string[] = [];
   let current = '';
   geo.segments.forEach((seg, i) => {
@@ -74,144 +83,146 @@ export default function ProcessProfileSVG({ steps, featureMap, height = 420, com
     if (i === geo.segments.length - 1 && current) paths.push(current);
   });
 
-  const arrowSize = 6;
-
-  // Stagger arrow labels vertically below the axis so clustered events (e.g.
-  // Fill, Inject, Op Call, Dosing all at similar times) fan out instead of overlapping.
-  const arrowLabelDepth: number[] = [];
-  const seenX: number[] = [];
-  geo.arrows.forEach((a) => {
-    const xPix = sx(a.x);
-    const nearbyCount = seenX.filter((sx2) => Math.abs(sx2 - xPix) < 34).length;
-    arrowLabelDepth.push(nearbyCount);
-    seenX.push(xPix);
-  });
+  const ARROW_W = 5;
+  const clickable = (id: string) => onSelectStep ? { cursor: 'pointer' } : {};
+  const select = (id: string) => (e: React.SyntheticEvent) => { e.stopPropagation(); onSelectStep?.(id); };
 
   return (
     <div className="profile-svg-wrap">
-      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} style={{ background: '#ffffff' }}>
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} style={{ background: '#ffffff', display: 'block' }}>
         {title && (
-          <text x={PAD_L} y={16} fontSize={12} fontWeight={600} fill={LABEL} fontFamily="Inter, Arial, sans-serif">
+          <text x={PAD_L} y={18} fontSize={14} fontWeight={700} fill={CORNER_LABEL} fontFamily="Inter, Arial, sans-serif">
             {title}
           </text>
         )}
+        {subtitle && (
+          <text x={PAD_L + (title ? title.length * 8.2 + 10 : 0)} y={18} fontSize={11.5} fill={TICK_LABEL} fontFamily="Inter, Arial, sans-serif">
+            {subtitle}
+          </text>
+        )}
+        {totalLabel && (
+          <text x={width - PAD_R} y={18} fontSize={13} fontWeight={700} textAnchor="end" fill={CORNER_LABEL} fontFamily="Inter, Arial, sans-serif">
+            {totalLabel}
+          </text>
+        )}
 
-        {/* axes */}
-        <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={PAD_T + plotH} stroke={AXIS} strokeWidth={1} />
-        <line x1={PAD_L} y1={PAD_T + plotH} x2={PAD_L + plotW} y2={PAD_T + plotH} stroke={AXIS} strokeWidth={1} />
+        {/* baseline axis */}
+        <line x1={PAD_L} y1={eventBaseline} x2={width - PAD_R} y2={eventBaseline} stroke={AXIS} strokeWidth={1} />
 
-        {tempTicks.map((t) => (
-          <g key={`tt-${t}`}>
-            <line x1={PAD_L - 4} y1={sy(t)} x2={PAD_L + plotW} y2={sy(t)} stroke="#f1f5f9" strokeWidth={1} />
-            <text x={PAD_L - 8} y={sy(t) + 3} fontSize={9} textAnchor="end" fill={AXIS} fontFamily="Inter, Arial, sans-serif">
-              {t}°
-            </text>
-          </g>
-        ))}
-
-        {timeTicks.map((tm) => (
-          <g key={`tm-${tm}`}>
-            <line x1={sx(tm)} y1={PAD_T + plotH} x2={sx(tm)} y2={PAD_T + plotH + 4} stroke={AXIS} strokeWidth={1} />
-            <text x={sx(tm)} y={PAD_T + plotH + 16} fontSize={9} textAnchor="middle" fill={AXIS} fontFamily="Inter, Arial, sans-serif">
-              {tm}m
-            </text>
-          </g>
-        ))}
-
-        {/* parallel operation dashed bands */}
-        {geo.bands.map((b, i) => {
-          const yellow = isYellowParallelKind(b.feature?.kind || '');
+        {/* parallel ramps (dashed diagonal) — drawn first, behind the main line */}
+        {geo.ramps.map((r, i) => {
+          const yellow = isYellowParallelKind(r.feature?.kind || '');
           const color = yellow ? YELLOW : GREEN;
-          const yBase = PAD_T + plotH;
-          const yTop = PAD_T + 10;
+          const x1 = sx(r.x1), x2 = sx(r.x2);
+          const yTop = sy(r.lineY);
+          const names = wrapName(r.nameLabel);
           return (
-            <g key={`band-${i}`}>
-              <line x1={sx(b.x1)} y1={yBase} x2={sx(b.x1)} y2={yTop} stroke={color} strokeWidth={1.5} strokeDasharray="4 3" />
-              <line x1={sx(b.x2)} y1={yBase} x2={sx(b.x2)} y2={yTop} stroke={color} strokeWidth={1.5} strokeDasharray="4 3" />
-              <line x1={sx(b.x1)} y1={yTop} x2={sx(b.x2)} y2={yTop} stroke={color} strokeWidth={1.5} strokeDasharray="4 3" />
-              <text x={(sx(b.x1) + sx(b.x2)) / 2} y={yTop - 4} fontSize={9} textAnchor="middle" fill={color} fontFamily="Inter, Arial, sans-serif">
-                {b.label}
+            <g key={`ramp-${i}`} style={clickable(r.step.id)} onClick={select(r.step.id)}>
+              <line x1={x1} y1={eventBaseline} x2={x2} y2={yTop + ARROW_W} stroke={color} strokeWidth={1.75} strokeDasharray="5 4" />
+              <polygon points={`${x2 - ARROW_W / 1.4},${yTop + ARROW_W} ${x2 + ARROW_W / 1.4},${yTop + ARROW_W} ${x2},${yTop}`} fill={color} />
+              <text x={(x1 + x2) / 2} y={Math.min(yTop, eventBaseline) - 8} fontSize={10} textAnchor="middle" fill={color} fontStyle="italic" fontFamily="Inter, Arial, sans-serif">
+                {r.durationLabel}
               </text>
+              {names.map((ln, li) => (
+                <text key={li} x={x2} y={eventBaseline + 16 + li * 12} fontSize={10.5} fontWeight={600} textAnchor="middle" fill={color} fontFamily="Inter, Arial, sans-serif">
+                  {ln}
+                </text>
+              ))}
             </g>
           );
         })}
 
         {/* main process line */}
         {paths.map((d, i) => (
-          <path key={`seg-${i}`} d={d} fill="none" stroke={NAVY} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+          <path key={`seg-${i}`} d={d} fill="none" stroke={NAVY} strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
+        ))}
+
+        {/* segment tick labels: duration (flat) or gradient (diagonal), centered above each segment */}
+        {geo.segments.map((seg, i) => {
+          const midX = (sx(seg.p1.x) + sx(seg.p2.x)) / 2;
+          const midY = (sy(seg.p1.y) + sy(seg.p2.y)) / 2;
+          const dy = seg.isDiagonal ? -8 : -10;
+          return (
+            <text
+              key={`tick-${i}`}
+              x={midX}
+              y={midY + dy}
+              fontSize={10}
+              fontStyle="italic"
+              textAnchor="middle"
+              fill={TICK_LABEL}
+              fontFamily="Inter, Arial, sans-serif"
+              style={clickable(seg.step.id)}
+              onClick={select(seg.step.id)}
+            >
+              {seg.tickLabel}
+            </text>
+          );
+        })}
+
+        {/* corner (bold) temperature labels */}
+        {geo.corners.map((c, i) => (
+          <text
+            key={`corner-${i}`}
+            x={sx(c.x)}
+            y={sy(c.temp) - 20}
+            fontSize={13}
+            fontWeight={700}
+            textAnchor="middle"
+            fill={CORNER_LABEL}
+            fontFamily="Inter, Arial, sans-serif"
+          >
+            {Math.round(c.temp)}°C
+          </text>
         ))}
 
         {/* round vertices */}
         {geo.segments.map((seg, i) => (
           <React.Fragment key={`pt-${i}`}>
-            <circle cx={sx(seg.p1.x)} cy={sy(seg.p1.y)} r={3} fill="#ffffff" stroke={NAVY} strokeWidth={2} />
-            <circle cx={sx(seg.p2.x)} cy={sy(seg.p2.y)} r={3} fill="#ffffff" stroke={NAVY} strokeWidth={2} />
+            <circle cx={sx(seg.p1.x)} cy={sy(seg.p1.y)} r={3.5} fill={NAVY} style={clickable(seg.step.id)} onClick={select(seg.step.id)} />
+            <circle cx={sx(seg.p2.x)} cy={sy(seg.p2.y)} r={3.5} fill={NAVY} style={clickable(seg.step.id)} onClick={select(seg.step.id)} />
           </React.Fragment>
         ))}
 
-        {/* event arrows — perfectly vertical, straight shafts, with staggered labels below */}
+        {/* event arrows — perfectly vertical shafts + arrowheads */}
         {geo.arrows.map((a, i) => {
           const color = a.color === 'green' ? GREEN : ORANGE;
           const xPix = sx(a.x);
-          const yLine = sy(a.yTop);
-          const yBase = PAD_T + plotH;
-          const depth = arrowLabelDepth[i];
-          const labelY = yBase + 16 + depth * 14;
-          return (
-            <g key={`arr-${i}`}>
-              {a.direction === 'up' ? (
-                <>
-                  <line x1={xPix} y1={yBase} x2={xPix} y2={yLine + arrowSize} stroke={color} strokeWidth={2} />
-                  <polygon
-                    points={`${xPix - arrowSize / 1.6},${yLine + arrowSize} ${xPix + arrowSize / 1.6},${yLine + arrowSize} ${xPix},${yLine}`}
-                    fill={color}
-                  />
-                </>
-              ) : (
-                <>
-                  <line x1={xPix} y1={yLine - arrowSize} x2={xPix} y2={yBase} stroke={color} strokeWidth={2} />
-                  <polygon
-                    points={`${xPix - arrowSize / 1.6},${yBase - arrowSize} ${xPix + arrowSize / 1.6},${yBase - arrowSize} ${xPix},${yBase}`}
-                    fill={color}
-                  />
-                </>
-              )}
-              {a.label && (
-                <>
-                  <line x1={xPix} y1={yBase} x2={xPix} y2={labelY - 8} stroke={color} strokeWidth={1} strokeDasharray="2 2" />
-                  <text x={xPix} y={labelY} fontSize={9.5} fontWeight={600} textAnchor="middle" fill={LABEL} fontFamily="Inter, Arial, sans-serif">
-                    {a.label}
+          const yLine = sy(a.lineY);
+          const names = wrapName(a.label);
+          const isSelected = selectedStepId === a.step.id;
+          if (a.direction === 'up') {
+            return (
+              <g key={`arr-${i}`} style={clickable(a.step.id)} onClick={select(a.step.id)}>
+                <line x1={xPix} y1={eventBaseline} x2={xPix} y2={yLine + ARROW_W} stroke={color} strokeWidth={isSelected ? 3 : 2} />
+                <polygon points={`${xPix - ARROW_W / 1.4},${yLine + ARROW_W} ${xPix + ARROW_W / 1.4},${yLine + ARROW_W} ${xPix},${yLine}`} fill={color} />
+                {names.map((ln, li) => (
+                  <text key={li} x={xPix} y={eventBaseline + 16 + li * 12} fontSize={10.5} fontWeight={600} textAnchor="middle" fill={NAME_LABEL} fontFamily="Inter, Arial, sans-serif">
+                    {ln}
                   </text>
-                </>
-              )}
+                ))}
+              </g>
+            );
+          }
+          return (
+            <g key={`arr-${i}`} style={clickable(a.step.id)} onClick={select(a.step.id)}>
+              <line x1={xPix} y1={yLine - ARROW_W} x2={xPix} y2={eventBaseline} stroke={color} strokeWidth={isSelected ? 3 : 2} />
+              <polygon points={`${xPix - ARROW_W / 1.4},${eventBaseline - ARROW_W} ${xPix + ARROW_W / 1.4},${eventBaseline - ARROW_W} ${xPix},${eventBaseline}`} fill={color} />
+              {names.map((ln, li) => (
+                <text key={li} x={xPix} y={eventBaseline + 16 + li * 12} fontSize={10.5} fontWeight={600} textAnchor="middle" fill={NAME_LABEL} fontFamily="Inter, Arial, sans-serif">
+                  {ln}
+                </text>
+              ))}
             </g>
           );
         })}
 
-        {/* Step labels: temperature / duration / gradient / name, offset above/below line */}
-        {!compact && geo.segments.map((seg, i) => {
-          const l = geo.labels[i];
-          if (!l) return null;
-          const midXpix = (sx(seg.p1.x) + sx(seg.p2.x)) / 2;
-          const midYpix = (sy(seg.p1.y) + sy(seg.p2.y)) / 2;
-          const dy = l.row > 0 ? 16 : -10;
-          return (
-            <text
-              key={`stlbl-${i}`}
-              x={midXpix}
-              y={midYpix + dy}
-              fontSize={9.5}
-              textAnchor="middle"
-              fill={LABEL}
-              fontFamily="Inter, Arial, sans-serif"
-            >
-              {l.text}
-            </text>
-          );
-        })}
+        {!compact && (
+          <text x={PAD_L} y={height - 6} fontSize={10} fill={TICK_LABEL} fontStyle="italic" fontFamily="Inter, Arial, sans-serif">
+            sequence / elapsed time →
+          </text>
+        )}
       </svg>
     </div>
   );
 }
-
-export { buildProfileGeometry } from '../../utils/profileGeometry';
