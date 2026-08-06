@@ -1,4 +1,4 @@
-import { Category, Feature, FeatureKind, Plant } from '../types';
+import { Category, Feature, FeatureKind, Plant, Treatment, TreatmentStep } from '../types';
 
 export const defaultPlants: Plant[] = [
   { id: 'plant-1', name: 'Plant 1', order: 0 },
@@ -62,3 +62,82 @@ export const defaultFeatures: Feature[] = seeds.map((s, i) => ({
   isCustom: false,
   order: i,
 }));
+
+// ---------------------------------------------------------------------------
+// Example Treatments — seeded once (only if the Treatments collection is
+// completely empty) so the app ships with real, editable process profiles
+// matching the mill's process-sheet format. Fully editable afterwards like
+// any other Treatment.
+// ---------------------------------------------------------------------------
+
+function step(featureKind: FeatureKind, partial: Partial<TreatmentStep> & { durationMinutes: number }): TreatmentStep {
+  const feature = defaultFeatures.find((f) => f.kind === featureKind);
+  return {
+    id: `seed-${featureKind}-${Math.random().toString(36).slice(2, 8)}`,
+    featureId: feature?.id || 'feature-hold',
+    ...partial,
+  };
+}
+
+export function buildExampleTreatments(plantId: string, categoryId: string): Treatment[] {
+  const now = new Date().toISOString();
+
+  const polyesterDyeing: Treatment = {
+    id: 'seed-treatment-polyester-dyeing-srt',
+    number: 'TR-101',
+    name: 'Polyester Dyeing (SRT)',
+    plantId,
+    categoryId,
+    description: 'Standard 100% polyester disperse dyeing cycle with fabric loading and dye dosing.',
+    totalWaterLKg: 5,
+    applicabilityNote: 'For P-1 & P-2',
+    steps: [
+      step('drain', { label: 'Drain (Cold)', durationMinutes: 2 }),
+      step('fill', { label: 'ST to MC Dry Fill', startTemp: 50, endTemp: 50, durationMinutes: 5 }),
+      step('operator_call', { label: 'PH Call', durationMinutes: 2 }),
+      step('inject', { label: 'Inj AT2 (PNR/Soft Water)', durationMinutes: 5 }),
+      step('inject', { label: 'Inj AT2 (Poly Levellers)', durationMinutes: 5 }),
+      step('loading', { label: 'Fabric Load', durationMinutes: 5 }),
+      step('dose', { label: 'AT1 Dosing (Dyes)', durationMinutes: 8 }),
+      step('heat', { startTemp: 50, endTemp: 80, gradient: 1.2, durationMinutes: 25 }),
+      step('hold', { startTemp: 80, durationMinutes: 10 }),
+      step('heat', { startTemp: 80, endTemp: 135, gradient: 1.2, durationMinutes: 46 }),
+      step('hold', { startTemp: 135, durationMinutes: 45 }),
+      step('cool', { startTemp: 135, endTemp: 105, gradient: 0.8, durationMinutes: 38 }),
+      step('hold', { startTemp: 105, durationMinutes: 2 }),
+      step('cool', { startTemp: 105, endTemp: 65, gradient: 0.8, durationMinutes: 50 }),
+      step('drain', { label: 'Drain (Hot)', durationMinutes: 2 }),
+    ],
+    totalDurationMinutes: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const fastWashingLT: Treatment = {
+    id: 'seed-treatment-fast-washing-lt-srt',
+    number: 'TR-102',
+    name: 'Fast Washing LT (SRT)',
+    plantId,
+    categoryId,
+    description: 'Light-shade post-dyeing wash cycle: reactive/polyester washing profile.',
+    totalWaterLKg: 15.2,
+    applicabilityNote: 'For P-1 & P-2',
+    steps: [
+      step('fill', { label: 'Recall LR (3.2) Warm', startTemp: 60, endTemp: 60, durationMinutes: 3 }),
+      step('hold', { label: 'Aqua 4 L/kg @60°C', startTemp: 60, durationMinutes: 10 }),
+      step('heat', { startTemp: 60, endTemp: 90, gradient: 2, durationMinutes: 15 }),
+      step('operator_call', { label: 'PH Call', durationMinutes: 8 }),
+      step('inject', { label: 'Inj AT2 (Acetic Acid)', durationMinutes: 2 }),
+      step('inject', { label: 'Inj AT2 (MUFC)', durationMinutes: 2 }),
+      step('cool', { startTemp: 90, endTemp: 40, gradient: 2, durationMinutes: 25 }),
+      step('hold', { label: 'Aqua 8 L/kg @40°C', startTemp: 40, durationMinutes: 5 }),
+      step('operator_call', { label: 'Sample Call', durationMinutes: 5 }),
+      step('drain', { label: 'Drain (Cold)', durationMinutes: 2 }),
+    ],
+    totalDurationMinutes: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  return [polyesterDyeing, fastWashingLT];
+}

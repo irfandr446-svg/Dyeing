@@ -1,9 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
-  addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, setDoc, updateDoc,
+  addDoc, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc, updateDoc,
 } from 'firebase/firestore';
 import { db, firebaseReady } from '../firebase';
-import { defaultCategories, defaultFeatures, defaultPlants } from '../data/defaultData';
+import { defaultCategories, defaultFeatures, defaultPlants, buildExampleTreatments } from '../data/defaultData';
 import { Category, Feature, Plant, Program, SaveState, Treatment } from '../types';
 import { calculateTreatmentTotal, calculateProgramTotal } from '../utils/timeUtils';
 
@@ -13,6 +13,7 @@ interface AppContextValue {
   dbError: string | null;
   treatmentsLoaded: boolean;
   programsLoaded: boolean;
+  runConnectionTest: () => Promise<{ step: string; ok: boolean; detail: string }[]>;
 
   plants: Plant[];
   categories: Category[];
@@ -103,6 +104,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         for (const p of defaultPlants) await setDoc(doc(db, 'plants', p.id), p, { merge: true });
         for (const c of defaultCategories) await setDoc(doc(db, 'categories', c.id), c, { merge: true });
         for (const f of defaultFeatures) await setDoc(doc(db, 'features', f.id), f, { merge: true });
+
+        // Seed two example Treatments matching the mill's process-sheet format,
+        // but ONLY if the Treatments collection is completely empty — never
+        // overwrite a user's real data.
+        const existingTreatments = await getDocs(collection(db, 'treatments'));
+        if (existingTreatments.empty) {
+          const examples = buildExampleTreatments(defaultPlants[0].id, defaultCategories[2].id); // Plant 1, Polyester Dyeing
+          for (const t of examples) {
+            const total = calculateTreatmentTotal(t.steps);
+            await setDoc(doc(db, 'treatments', t.id), { ...t, totalDurationMinutes: total });
+          }
+        }
       } catch (e: any) {
         setDbError(`Could not write to Firestore: ${e?.code || e?.message || e}. Check VITE_FIREBASE_FIRESTORE_DATABASE_ID and that firestore.rules is deployed.`);
       }
@@ -218,10 +231,47 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setProgramsRaw((prev) => prev.filter((p) => p.id !== id));
   }), [setProgramsRaw, withSaveState]);
 
+  const runConnectionTest = useCallback(async () => {
+    const results: { step: string; ok: boolean; detail: string }[] = [];
+    results.push({ step: 'Config present', ok: firebaseReady, detail: firebaseReady ? 'Firebase config loaded from .env' : 'Missing VITE_FIREBASE_* values — copy .env.example to .env' });
+    if (!firebaseReady) return results;
+
+    const probeId = `probe-${Date.now()}`;
+    const ref = doc(db, '_diagnostics', probeId);
+    try {
+      await setDoc(ref, { ts: new Date().toISOString() });
+      results.push({ step: 'Write test document', ok: true, detail: `Wrote _diagnostics/${probeId}` });
+    } catch (e: any) {
+      results.push({ step: 'Write test document', ok: false, detail: `${e?.code || ''} ${e?.message || e}`.trim() });
+      results.push({ step: 'Diagnosis', ok: false, detail: e?.code === 'permission-denied'
+        ? 'Security rules are blocking writes. Deploy firestore.rules: firebase deploy --only firestore:rules'
+        : 'This usually means the database ID is wrong (check VITE_FIREBASE_FIRESTORE_DATABASE_ID) or the project has no Firestore database yet.' });
+      return results;
+    }
+
+    try {
+      const snap = await getDoc(ref);
+      results.push({ step: 'Read test document', ok: snap.exists(), detail: snap.exists() ? 'Read back successfully' : 'Document not found after write' });
+    } catch (e: any) {
+      results.push({ step: 'Read test document', ok: false, detail: `${e?.code || ''} ${e?.message || e}`.trim() });
+    }
+
+    try {
+      await deleteDoc(ref);
+      results.push({ step: 'Clean up test document', ok: true, detail: 'Deleted probe document' });
+    } catch (e: any) {
+      results.push({ step: 'Clean up test document', ok: false, detail: `${e?.code || ''} ${e?.message || e}`.trim() });
+    }
+
+    results.push({ step: 'Overall', ok: results.every((r) => r.ok), detail: results.every((r) => r.ok) ? 'Firestore read/write is working correctly.' : 'See failing step above.' });
+    return results;
+  }, []);
+
   const value: AppContextValue = {
     ready: true,
     saveState,
     dbError,
+    runConnectionTest,
     treatmentsLoaded,
     programsLoaded,
     plants,

@@ -11,5 +11,6 @@ service cloud.firestore {
     match /features/{id} { allow read, write: if true; }
     match /treatments/{id} { allow read, write: if true; }
     match /programs/{id} { allow read, write: if true; }
+    match /_diagnostics/{id} { allow read, write: if true; }
   }
 }

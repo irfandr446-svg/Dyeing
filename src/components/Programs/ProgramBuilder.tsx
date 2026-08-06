@@ -214,9 +214,12 @@ function ProgramBuilderInner({ existing, onClose }: { existing: Program | null; 
           const t = treatmentMap[entry.treatmentId];
           if (!t) return null;
           return (
-            <div className="profile-panel" key={entry.id} style={{ height: 260, marginBottom: 12 }}>
+            <div className="profile-panel" key={entry.id} style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--navy-dark)', marginBottom: 4 }}>
+                {t.number} — {t.name}
+              </div>
               {entry.delayBeforeMinutes > 0 && (
-                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', padding: '6px 10px 0' }}>
+                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 4 }}>
                   +{entry.delayBeforeMinutes} min delay before this treatment
                 </div>
               )}
@@ -225,7 +228,6 @@ function ProgramBuilderInner({ existing, onClose }: { existing: Program | null; 
                 featureMap={featureMap}
                 height={230}
                 compact
-                title={`${t.number} — ${t.name}`}
                 totalLabel={formatDuration(t.totalDurationMinutes)}
               />
             </div>

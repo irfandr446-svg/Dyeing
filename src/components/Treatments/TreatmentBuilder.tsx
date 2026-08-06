@@ -179,7 +179,7 @@ function TreatmentBuilderInner({ existing, onClose }: { existing: Treatment | nu
         <div style={{ display: 'flex', gap: 6 }}>
           <button className="btn btn-sm" onClick={undo}><Undo2 size={13} /> Undo</button>
           <button className="btn btn-sm" onClick={redo}><Redo2 size={13} /> Redo</button>
-          <button className="btn btn-sm" onClick={() => exportTreatmentPDF(draft, categoryName, plantName, featureMap)}><FileDown size={13} /> PDF</button>
+          <button className="btn btn-sm" onClick={() => exportTreatmentPDF({ ...draft, totalDurationMinutes: total }, categoryName, plantName, featureMap)}><FileDown size={13} /> PDF</button>
           <button className="btn btn-primary" onClick={doSave}>Save</button>
         </div>
       </div>
@@ -192,7 +192,7 @@ function TreatmentBuilderInner({ existing, onClose }: { existing: Treatment | nu
           </div>
           <div className="field-row">
             <label>Treatment Name</label>
-            <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="e.g. Polyester Dyeing" />
+            <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="e.g. Polyester Dyeing (SRT)" />
           </div>
           <div className="field-row">
             <label>Plant</label>
@@ -206,6 +206,23 @@ function TreatmentBuilderInner({ existing, onClose }: { existing: Treatment | nu
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
+          <div className="field-row">
+            <label>Total Water (L/kg)</label>
+            <input
+              type="number" step="0.1"
+              value={draft.totalWaterLKg ?? ''}
+              onChange={(e) => setDraft({ ...draft, totalWaterLKg: e.target.value === '' ? undefined : Number(e.target.value) })}
+              placeholder="e.g. 15.2"
+            />
+          </div>
+          <div className="field-row">
+            <label>Applicability Note</label>
+            <input
+              value={draft.applicabilityNote ?? ''}
+              onChange={(e) => setDraft({ ...draft, applicabilityNote: e.target.value })}
+              placeholder="e.g. For P-1 & P-2"
+            />
+          </div>
         </div>
         <div className="field-row" style={{ marginBottom: 0 }}>
           <label>Description</label>
@@ -217,10 +234,11 @@ function TreatmentBuilderInner({ existing, onClose }: { existing: Treatment | nu
         <ProcessProfileSVG
           steps={draft.steps}
           featureMap={featureMap}
-          height={360}
-          title={`${categoryName || 'Process'} Profile`}
-          subtitle={draft.number}
+          height={400}
+          title={draft.name || 'Untitled Treatment'}
           totalLabel={formatDuration(total)}
+          totalWaterLKg={draft.totalWaterLKg}
+          applicabilityNote={draft.applicabilityNote}
           onSelectStep={setSelectedStepId}
           selectedStepId={selectedStepId}
         />

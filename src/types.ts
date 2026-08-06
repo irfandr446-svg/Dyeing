@@ -90,6 +90,10 @@ export interface Treatment {
   description: string;
   steps: TreatmentStep[];
   totalDurationMinutes: number;
+  /** Total water consumption in L/kg, shown on the profile card + export, matching mill process-sheet convention. */
+  totalWaterLKg?: number;
+  /** Free-text applicability note shown as a small badge on the profile, e.g. "For P-1 & P-2". */
+  applicabilityNote?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -27,6 +27,13 @@ The app works without Firebase configured too — it will run entirely on the
 built-in default Plants/Categories/Features, but Treatments/Programs won't
 persist between reloads until a Firebase project is connected.
 
+On first successful connection to an **empty** Firestore database, two example
+Treatments ("Polyester Dyeing (SRT)" and "Fast Washing LT (SRT)") are seeded
+automatically, formatted the same way as the mill's process sheets (checkbox
+title badge, Total Water / Set Time table, applicability note). They're
+regular Treatments after that — edit, delete, or use them as a template for
+entering the rest of your process library through the UI.
+
 ### Firebase project
 1. Create a Firebase project → add a Web App → copy the config values into `.env`.
 2. Enable **Firestore** (Native mode).
